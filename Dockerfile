@@ -4,15 +4,23 @@ FROM python:3.11-slim
 # Set working directory
 WORKDIR /app
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
+# Install runtime system dependencies (keep image small)
+RUN apt-get update && apt-get install -y --no-install-recommends \
     libglib2.0-0 \
     libsm6 \
     libxext6 \
     libxrender-dev \
     libgomp1 \
     ffmpeg \
+    ca-certificates \
+    curl \
     && rm -rf /var/lib/apt/lists/*
+
+# Optional: install build tools if building packages with C extensions (disabled by default)
+ARG INSTALL_BUILD_DEPENDENCIES=0
+RUN if [ "$INSTALL_BUILD_DEPENDENCIES" = "1" ]; then \
+      apt-get update && apt-get install -y build-essential gcc python3-dev && rm -rf /var/lib/apt/lists/*; \
+    fi
 
 # Copy requirements first (for better caching)
 COPY requirements.txt .
