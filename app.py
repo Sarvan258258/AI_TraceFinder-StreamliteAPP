@@ -65,12 +65,12 @@ st.set_page_config(
 )
 
 # --- Configuration ---
-# Import demo detectors for fallback mode
+# Memory optimization for cloud deployment
 try:
-    from demo_detectors import demo_scanner_detection, demo_tamper_detection
-    DEMO_AVAILABLE = True
+    import psutil
+    PSUTIL_AVAILABLE = True
 except ImportError:
-    DEMO_AVAILABLE = False
+    PSUTIL_AVAILABLE = False
 
 ART_DIR = "models"
 # Scanner detection models
@@ -166,67 +166,63 @@ with st.sidebar.expander("Tamper Detection", expanded=False):
 # --- Load Artifacts ---
 @st.cache_resource
 def load_scanner_artifacts():
-    """Load scanner detection model with Render-optimized compatibility"""
+    """Load scanner detection model with optimized memory usage"""
     if not TF_AVAILABLE:
-        st.warning("⚠️ TensorFlow not available - using demo mode")
+        st.error("❌ TensorFlow not available")
         return None, None, None, None, None
     
     try:
         import tensorflow as tf
-        st.info(f"🔧 TensorFlow: {tf.__version__}, Keras: {tf.keras.__version__}")
+        import os
         
-        # Method 1: Direct loading with compile=False
+        # Memory optimization
+        os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+        tf.keras.backend.clear_session()
+        
+        st.info(f"� TensorFlow: {tf.__version__}")
+        
+        # Force model loading with error details
         try:
+            # Try direct loading first
             model = tf.keras.models.load_model(SCANNER_MODEL_PATH, compile=False)
-            st.success("✅ Scanner model loaded successfully")
-        except Exception as e1:
-            st.info("🔄 Trying Render-optimized loading methods...")
+            st.success("✅ Direct model loading successful")
             
-            # Method 2: Force specific Keras backend
+        except Exception as e1:
+            st.warning(f"Direct loading failed: {str(e1)[:100]}...")
+            
+            # Try with custom objects cleared
             try:
-                import os
-                os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'  # Reduce TensorFlow logs
-                
-                # Try loading with custom objects cleared
                 tf.keras.utils.get_custom_objects().clear()
                 model = tf.keras.models.load_model(SCANNER_MODEL_PATH, compile=False, safe_mode=False)
                 st.success("✅ Model loaded with custom objects cleared")
                 
             except Exception as e2:
-                # Method 3: Legacy compatibility mode
-                try:
-                    # Set TensorFlow to use legacy Keras
-                    tf.config.experimental.enable_mlir_graph_optimization(False)
-                    model = tf.keras.models.load_model(SCANNER_MODEL_PATH, compile=False)
-                    st.success("✅ Model loaded with legacy compatibility")
-                    
-                except Exception as e3:
-                    st.warning("⚠️ Model compatibility issue on Render cloud environment")
-                    st.info("💡 This is due to TensorFlow version differences between training and deployment")
-                    st.info("🎭 Using enhanced demo mode - provides professional results")
-                    
-                    with st.expander("🔍 Technical Details"):
-                        st.write(f"Training environment vs Render environment compatibility issue:")
-                        st.write(f"Error 1: {str(e1)[:150]}...")
-                        st.write(f"Error 2: {str(e2)[:150]}...")
-                        st.write(f"Error 3: {str(e3)[:150]}...")
-                    
-                    return None, None, None, None, None
+                st.error(f"Model loading failed: {str(e2)[:100]}...")
+                return None, None, None, None, None
         
-        # Load supporting artifacts
-        with open(SCANNER_LABEL_ENCODER_PATH, "rb") as f:
-            le = pickle.load(f)
-        with open(SCANNER_SCALER_PATH, "rb") as f:
-            scaler = pickle.load(f)
-        with open(FP_PATH, "rb") as f:
-            fps = pickle.load(f)
-        keys = np.load(FP_KEYS_PATH, allow_pickle=True).tolist()
-        
-        st.success("✅ All scanner artifacts loaded successfully")
-        return model, le, scaler, fps, keys
+        # Load supporting artifacts with memory optimization
+        try:
+            with open(SCANNER_LABEL_ENCODER_PATH, "rb") as f:
+                le = pickle.load(f)
+            with open(SCANNER_SCALER_PATH, "rb") as f:
+                scaler = pickle.load(f)
+            with open(FP_PATH, "rb") as f:
+                fps = pickle.load(f)
+            keys = np.load(FP_KEYS_PATH, allow_pickle=True).tolist()
+            
+            # Memory cleanup
+            import gc
+            gc.collect()
+            
+            st.success("✅ All scanner artifacts loaded")
+            return model, le, scaler, fps, keys
+            
+        except Exception as e:
+            st.error(f"Failed to load supporting files: {str(e)}")
+            return None, None, None, None, None
         
     except Exception as e:
-        st.info(f"🎭 Using demo mode due to cloud environment compatibility")
+        st.error(f"Critical error in scanner loading: {str(e)}")
         return None, None, None, None, None
 
 @st.cache_resource
@@ -252,47 +248,64 @@ tamper_model, tamper_scaler, tamper_threshold = None, None, None
 # Demo mode flag - activated when models fail to load
 demo_mode = False
 
-# Check if we have the necessary dependencies before loading models
-if not all([CV2_AVAILABLE, PYWT_AVAILABLE, SKIMAGE_AVAILABLE]):
-    st.error("❌ Critical dependencies missing. The application may not function properly.")
-    st.info("Please ensure all required packages are installed as specified in requirements.txt")
-    demo_mode = True
+# Force real model loading - disable demo mode fallback
+demo_mode = False
 
-if analysis_type in ["Both (Scanner + Tamper Detection)", "Scanner Source Only"] and TF_AVAILABLE:
-    scanner_model, scanner_le, scanner_scaler, scanner_fps, fp_keys = load_scanner_artifacts()
-    if not all([scanner_model, scanner_le, scanner_scaler, scanner_fps, fp_keys]):
-        st.warning("⚠️ Scanner detection models unavailable - enabling demo mode")
-        if analysis_type == "Scanner Source Only":
-            demo_mode = True
+# Aggressive memory optimization for Render
+import gc
+import psutil
+import sys
 
-if analysis_type in ["Both (Scanner + Tamper Detection)", "Tamper Detection Only"] and JOBLIB_AVAILABLE:
-    tamper_model, tamper_scaler, tamper_threshold = load_tamper_artifacts()
-    if not all([tamper_model, tamper_scaler, tamper_threshold]):
-        st.warning("⚠️ Tamper detection models unavailable - enabling demo mode")
-        if analysis_type == "Tamper Detection Only":
-            demo_mode = True
+def optimize_memory():
+    """Optimize memory usage for cloud deployment"""
+    gc.collect()
+    try:
+        process = psutil.Process(os.getpid())
+        memory_info = process.memory_info()
+        memory_mb = memory_info.rss / 1024 / 1024
+        st.info(f"📊 Memory usage: {memory_mb:.1f} MB")
+        if memory_mb > 400:  # Render free tier limit ~500MB
+            st.warning("⚠️ High memory usage - optimizing...")
+            gc.collect()
+    except:
+        pass
 
-# Show demo mode notice
-if demo_mode:
-    st.info("""
-    🎭 **Demo Mode Active**
+# Load models only when needed and with memory optimization
+@st.cache_resource(show_spinner="🚀 Loading AI models...")
+def load_models_optimized(analysis_type):
+    """Load models with memory optimization"""
+    optimize_memory()
     
-    The application is running in demo mode due to model compatibility issues.
+    scanner_artifacts = None, None, None, None, None
+    tamper_artifacts = None, None, None
     
-    **To fix this:**
-    1. Run the model compatibility fixer: `python fix_model_compatibility.py`
-    2. Or ensure all model files are present and compatible with your TensorFlow version
-    3. Check that all dependencies are properly installed
+    if analysis_type in ["Both (Scanner + Tamper Detection)", "Scanner Source Only"] and TF_AVAILABLE:
+        scanner_artifacts = load_scanner_artifacts()
+        optimize_memory()
     
-    Demo mode will show simulated results for demonstration purposes.
-    """)
+    if analysis_type in ["Both (Scanner + Tamper Detection)", "Tamper Detection Only"] and JOBLIB_AVAILABLE:
+        tamper_artifacts = load_tamper_artifacts()
+        optimize_memory()
+    
+    return scanner_artifacts, tamper_artifacts
 
-# Add demo mode toggle in sidebar for testing
-with st.sidebar:
-    st.markdown("### 🎛️ Advanced Options")
-    force_demo = st.checkbox("🎭 Force Demo Mode", value=demo_mode, help="Enable to test UI without real models")
-    if force_demo:
-        demo_mode = True
+# Load models with optimization
+scanner_artifacts, tamper_artifacts = load_models_optimized(analysis_type)
+scanner_model, scanner_le, scanner_scaler, scanner_fps, fp_keys = scanner_artifacts
+tamper_model, tamper_scaler, tamper_threshold = tamper_artifacts
+
+# Show model status
+if analysis_type in ["Both (Scanner + Tamper Detection)", "Scanner Source Only"]:
+    if scanner_model is None:
+        st.error("❌ Scanner model failed to load - check model files and TensorFlow compatibility")
+    else:
+        st.success("✅ Scanner model loaded successfully")
+
+if analysis_type in ["Both (Scanner + Tamper Detection)", "Tamper Detection Only"]:
+    if tamper_model is None:
+        st.error("❌ Tamper model failed to load - check model files")
+    else:
+        st.success("✅ Tamper model loaded successfully")
 
 # --- Feature Extraction Functions ---
 
@@ -530,58 +543,8 @@ def analyze_image(img_array, page_info=""):
     progress_bar = st.progress(0)
     status_text = st.empty()
     
-    # Check for demo mode first
-    if demo_mode:
-        status_text.text(f"🎭 Running enhanced demo analysis{page_info}...")
-        progress_bar.progress(0.3)
-        time.sleep(0.8)  # Simulate processing time
-        
-        if analysis_type in ["Both (Scanner + Tamper Detection)", "Scanner Source Only"]:
-            progress_bar.progress(0.6)
-            if DEMO_AVAILABLE:
-                try:
-                    scanner_label, scanner_conf = demo_scanner_detection(img_array)
-                except:
-                    scanner_label, scanner_conf = "Canon EOS", 85.5
-            else:
-                # Fallback demo results
-                import random
-                scanner_brands = ['Canon EOS', 'HP LaserJet', 'Epson WorkForce', 'Brother MFC']
-                scanner_label = random.choice(scanner_brands)
-                scanner_conf = random.uniform(75, 95)
-            scanner_time = random.uniform(0.8, 1.5)
-            results['scanner'] = (scanner_label, scanner_conf, scanner_time)
-        
-        if analysis_type in ["Both (Scanner + Tamper Detection)", "Tamper Detection Only"]:
-            progress_bar.progress(0.9)
-            if DEMO_AVAILABLE:
-                try:
-                    tamper_label, tamper_conf = demo_tamper_detection(img_array)
-                except:
-                    tamper_label, tamper_conf = "Clean", 78.2
-            else:
-                # Fallback demo results  
-                import random
-                tamper_labels = ['Clean', 'Tampered']
-                tamper_label = random.choice(tamper_labels)
-                tamper_conf = random.uniform(70, 90)
-            tamper_time = random.uniform(0.5, 1.2)
-            results['tamper'] = (tamper_label, tamper_conf, tamper_time)
-        
-        progress_bar.progress(1.0)
-        total_time = time.time() - start_time
-        status_text.text(f"✅ Demo analysis complete{page_info}! ({total_time:.2f}s)")
-        
-        # Update session statistics
-        st.session_state.processed_images += 1
-        st.session_state.analysis_time += total_time
-        
-        # Clear progress indicators after a moment
-        time.sleep(1)
-        progress_bar.empty()
-        status_text.empty()
-        
-        return results
+    # Real analysis only - no demo mode
+    status_text.text(f"🔍 Running AI analysis{page_info}...")
     
     total_steps = 0
     current_step = 0

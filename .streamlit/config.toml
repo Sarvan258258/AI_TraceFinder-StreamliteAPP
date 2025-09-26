@@ -1,0 +1,27 @@
+[server]
+maxUploadSize = 50
+maxMessageSize = 50
+enableCORS = false
+enableXsrfProtection = false
+headless = true
+
+[global]
+maxCachedMessageAge = 1
+unitTest = false
+developmentMode = false
+
+[theme]
+base = "dark"
+primaryColor = "#FF6B6B"
+backgroundColor = "#0E1117"
+secondaryBackgroundColor = "#262730"
+textColor = "#FAFAFA"
+
+[runner]
+magicEnabled = false
+installTracer = false
+fixMatplotlib = false
+
+[client]
+caching = false
+displayEnabled = false
