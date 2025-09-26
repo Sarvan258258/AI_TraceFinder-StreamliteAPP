@@ -1,4 +1,10 @@
 
+import os
+# Suppress TensorFlow GPU/CUDA logs and prevent GPU discovery in CPU-only environments
+os.environ.setdefault('TF_CPP_MIN_LOG_LEVEL', '2')
+os.environ.setdefault('CUDA_VISIBLE_DEVICES', '')
+os.environ.setdefault('OMP_NUM_THREADS', '2')
+
 import streamlit as st
 import numpy as np
 import pickle

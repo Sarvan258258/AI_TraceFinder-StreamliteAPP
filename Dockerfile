@@ -4,6 +4,11 @@ FROM python:3.11-slim
 # Set working directory
 WORKDIR /app
 
+# Reduce TensorFlow logging and avoid GPU discovery in CPU-only containers
+ENV TF_CPP_MIN_LOG_LEVEL=2
+ENV CUDA_VISIBLE_DEVICES=""
+ENV OMP_NUM_THREADS=2
+
 # Install runtime system dependencies (keep image small)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libglib2.0-0 \
