@@ -2,3 +2,12 @@ streamlit
 numpy
 pillow
 pandas
+python-dateutil
+opencv-python-headless
+scikit-learn
+scikit-image
+PyWavelets
+tensorflow-cpu
+joblib
+plotly
+PyMuPDF
