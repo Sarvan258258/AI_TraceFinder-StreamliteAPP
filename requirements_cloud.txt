@@ -1,0 +1,24 @@
+# Lightweight requirements for Streamlit Cloud deployment
+streamlit
+numpy
+pillow
+pandas
+python-dateutil
+
+# Computer Vision and Image Processing
+opencv-python-headless
+
+# Scientific Computing
+scikit-learn
+scikit-image
+PyWavelets
+
+# Machine Learning
+tensorflow-cpu
+joblib
+
+# Optional: Enhanced visualizations
+plotly
+
+# Optional: PDF processing
+PyMuPDF
