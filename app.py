@@ -9,33 +9,31 @@ from PIL import Image
 from io import BytesIO
 
 # Try to import optional dependencies with fallbacks
+# Try to import optional dependencies with fallbacks
 try:
     import cv2
     CV2_AVAILABLE = True
 except ImportError:
     CV2_AVAILABLE = False
-    st.error("⚠️ OpenCV not available. Some image processing features may be limited.")
+    # Don't show error immediately - only when actually needed
 
 try:
     import pywt
     PYWT_AVAILABLE = True
 except ImportError:
     PYWT_AVAILABLE = False
-    st.error("⚠️ PyWavelets not available. Wavelet analysis features disabled.")
 
 try:
     from skimage.feature import local_binary_pattern as sk_lbp
     SKIMAGE_AVAILABLE = True
 except ImportError:
     SKIMAGE_AVAILABLE = False
-    st.error("⚠️ Scikit-image not available. LBP features may be limited.")
 
 try:
     import joblib
     JOBLIB_AVAILABLE = True
 except ImportError:
     JOBLIB_AVAILABLE = False
-    st.error("⚠️ Joblib not available. SVM models cannot be loaded.")
 
 try:
     import tensorflow as tf
@@ -43,14 +41,12 @@ try:
     TF_AVAILABLE = True
 except ImportError:
     TF_AVAILABLE = False
-    st.error("⚠️ TensorFlow not available. CNN models cannot be loaded.")
 
 try:
     import fitz # PyMuPDF
     FITZ_AVAILABLE = True
 except ImportError:
     FITZ_AVAILABLE = False
-    st.warning("⚠️ PyMuPDF not available. PDF processing disabled.")
 
 # Try to import plotly, provide fallback if not available
 try:
@@ -59,7 +55,6 @@ try:
     PLOTLY_AVAILABLE = True
 except ImportError:
     PLOTLY_AVAILABLE = False
-    st.sidebar.info("📊 Install plotly for enhanced visualizations: pip install plotly")
 
 # --- Page Configuration ---
 st.set_page_config(
@@ -119,6 +114,31 @@ with st.sidebar.expander("📈 Session Statistics", expanded=False):
     if st.session_state.processed_images > 0:
         avg_time = st.session_state.analysis_time / st.session_state.processed_images
         st.metric("Avg Processing Time", f"{avg_time:.2f}s")
+
+# Dependency Status
+with st.sidebar.expander("🔧 System Status", expanded=False):
+    st.write("**Dependencies:**")
+    st.write(f"OpenCV: {'✅' if CV2_AVAILABLE else '❌'}")
+    st.write(f"TensorFlow: {'✅' if TF_AVAILABLE else '❌'}")
+    st.write(f"PyWavelets: {'✅' if PYWT_AVAILABLE else '❌'}")
+    st.write(f"Scikit-image: {'✅' if SKIMAGE_AVAILABLE else '❌'}")
+    st.write(f"Joblib: {'✅' if JOBLIB_AVAILABLE else '❌'}")
+    st.write(f"PyMuPDF: {'✅' if FITZ_AVAILABLE else '❌'}")
+    st.write(f"Plotly: {'✅' if PLOTLY_AVAILABLE else '❌'}")
+    
+    # Show warnings for missing dependencies
+    missing_deps = []
+    if not CV2_AVAILABLE:
+        missing_deps.append("OpenCV (image processing)")
+    if not TF_AVAILABLE:
+        missing_deps.append("TensorFlow (CNN models)")
+    if not JOBLIB_AVAILABLE:
+        missing_deps.append("Joblib (SVM models)")
+    
+    if missing_deps:
+        st.warning(f"Missing: {', '.join(missing_deps)}")
+    else:
+        st.success("All dependencies loaded!")
 
 # Footer information
 st.sidebar.markdown("---")
@@ -293,22 +313,43 @@ def make_feat_vector(res):
     """Make feature vector for tamper detection"""
     return np.concatenate([lbp_hist_safe(res,8,1.0), fft_radial_energy(res,6), residual_stats(res)], axis=0)
 
+def simple_image_resize(img_array, size=(256, 256)):
+    """Fallback image resize using PIL when OpenCV is not available"""
+    from PIL import Image
+    if img_array.ndim == 3:
+        img_pil = Image.fromarray(img_array)
+    else:
+        img_pil = Image.fromarray(img_array, mode='L')
+    
+    img_resized = img_pil.resize(size, Image.LANCZOS)
+    return np.array(img_resized)
+
 def preprocess_and_featurize(img_array, scaler, size=(256, 256)):
     """Preprocess and extract features for tamper detection with fallbacks"""
-    if not CV2_AVAILABLE:
-        st.error("❌ OpenCV not available for image preprocessing")
-        return None
-        
     try:
+        # Convert to grayscale
         if img_array.ndim == 3:
-            img_array = cv2.cvtColor(img_array, cv2.COLOR_BGR2GRAY)
-        img_resized = cv2.resize(img_array, size, interpolation=cv2.INTER_AREA).astype(np.float32) / 255.0
+            if CV2_AVAILABLE:
+                img_gray = cv2.cvtColor(img_array, cv2.COLOR_BGR2GRAY)
+            else:
+                # Fallback: simple RGB to grayscale conversion
+                img_gray = np.dot(img_array[...,:3], [0.2989, 0.5870, 0.1140])
+        else:
+            img_gray = img_array
         
-        if PYWT_AVAILABLE:
+        # Resize image
+        if CV2_AVAILABLE:
+            img_resized = cv2.resize(img_gray, size, interpolation=cv2.INTER_AREA).astype(np.float32) / 255.0
+        else:
+            img_resized = simple_image_resize(img_gray.astype(np.uint8), size).astype(np.float32) / 255.0
+        
+        if PYWT_AVAILABLE and scaler is not None:
+            # Full feature extraction with wavelets
             residual = preprocess_residual_from_array(img_resized)
             features = make_feat_vector(residual).reshape(1, -1)
+            scaled_features = scaler.transform(features)
         else:
-            # Fallback: use simple statistical features
+            # Simple fallback features
             features = np.array([[
                 img_resized.mean(),
                 img_resized.std(), 
@@ -318,10 +359,13 @@ def preprocess_and_featurize(img_array, scaler, size=(256, 256)):
                 img_resized.max()
             ]])
             
-        if scaler is not None:
-            scaled_features = scaler.transform(features)
-        else:
-            scaled_features = features
+            if scaler is not None:
+                try:
+                    scaled_features = scaler.transform(features)
+                except:
+                    scaled_features = features
+            else:
+                scaled_features = features
             
         return scaled_features
     except Exception as e:
@@ -378,9 +422,6 @@ def pdf_to_images(uploaded_file, dpi=DPI):
     if not FITZ_AVAILABLE:
         st.error("❌ PyMuPDF not available - PDF processing disabled")
         return []
-    if not CV2_AVAILABLE:
-        st.error("❌ OpenCV not available - image conversion may fail")
-        return []
         
     images = []
     try:
@@ -389,8 +430,15 @@ def pdf_to_images(uploaded_file, dpi=DPI):
             page = doc.load_page(page_num)
             pix = page.get_pixmap(dpi=dpi)
             img_array = np.frombuffer(pix.samples, dtype=np.uint8).reshape((pix.height, pix.width, pix.n))
+            
+            # Handle RGBA to RGB conversion
             if pix.n == 4: # RGBA
-                img_array = cv2.cvtColor(img_array, cv2.COLOR_RGBA2RGB)
+                if CV2_AVAILABLE:
+                    img_array = cv2.cvtColor(img_array, cv2.COLOR_RGBA2RGB)
+                else:
+                    # Fallback: simple RGBA to RGB conversion
+                    img_array = img_array[:, :, :3]  # Just drop alpha channel
+            
             images.append(img_array)
         doc.close()
         return images

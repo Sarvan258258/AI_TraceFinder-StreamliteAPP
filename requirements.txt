@@ -3,11 +3,11 @@ numpy
 pillow
 pandas
 python-dateutil
-opencv-python-headless
+opencv-python-headless==4.8.1.78
 scikit-learn
 scikit-image
 PyWavelets
-tensorflow-cpu
+tensorflow-cpu==2.15.0
 joblib
 plotly
 PyMuPDF
