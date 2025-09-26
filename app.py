@@ -166,34 +166,51 @@ with st.sidebar.expander("Tamper Detection", expanded=False):
 # --- Load Artifacts ---
 @st.cache_resource
 def load_scanner_artifacts():
-    """Load scanner detection model and related artifacts with TensorFlow compatibility handling"""
+    """Load scanner detection model with Render-optimized compatibility"""
     if not TF_AVAILABLE:
         st.warning("⚠️ TensorFlow not available - using demo mode")
         return None, None, None, None, None
     
     try:
-        # Method 1: Try standard loading first
+        import tensorflow as tf
+        st.info(f"🔧 TensorFlow: {tf.__version__}, Keras: {tf.keras.__version__}")
+        
+        # Method 1: Direct loading with compile=False
         try:
-            model = load_model(SCANNER_MODEL_PATH, compile=False)
+            model = tf.keras.models.load_model(SCANNER_MODEL_PATH, compile=False)
             st.success("✅ Scanner model loaded successfully")
         except Exception as e1:
-            # Method 2: Try with custom objects and safe mode disabled
+            st.info("🔄 Trying Render-optimized loading methods...")
+            
+            # Method 2: Force specific Keras backend
             try:
-                import tensorflow as tf
+                import os
+                os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'  # Reduce TensorFlow logs
+                
+                # Try loading with custom objects cleared
+                tf.keras.utils.get_custom_objects().clear()
                 model = tf.keras.models.load_model(SCANNER_MODEL_PATH, compile=False, safe_mode=False)
-                st.success("✅ Scanner model loaded with compatibility mode")
+                st.success("✅ Model loaded with custom objects cleared")
+                
             except Exception as e2:
-                # Method 3: Try loading with specific TensorFlow settings
+                # Method 3: Legacy compatibility mode
                 try:
-                    import tensorflow as tf
-                    # Disable eager execution temporarily
-                    tf.compat.v1.disable_eager_execution()
+                    # Set TensorFlow to use legacy Keras
+                    tf.config.experimental.enable_mlir_graph_optimization(False)
                     model = tf.keras.models.load_model(SCANNER_MODEL_PATH, compile=False)
-                    tf.compat.v1.enable_eager_execution()
-                    st.success("✅ Scanner model loaded with TF v1 compatibility")
+                    st.success("✅ Model loaded with legacy compatibility")
+                    
                 except Exception as e3:
-                    st.info("🎭 Your trained model has TensorFlow version compatibility issues")
-                    st.info("💡 Using enhanced demo mode - your model accuracy is preserved for local use")
+                    st.warning("⚠️ Model compatibility issue on Render cloud environment")
+                    st.info("💡 This is due to TensorFlow version differences between training and deployment")
+                    st.info("🎭 Using enhanced demo mode - provides professional results")
+                    
+                    with st.expander("🔍 Technical Details"):
+                        st.write(f"Training environment vs Render environment compatibility issue:")
+                        st.write(f"Error 1: {str(e1)[:150]}...")
+                        st.write(f"Error 2: {str(e2)[:150]}...")
+                        st.write(f"Error 3: {str(e3)[:150]}...")
+                    
                     return None, None, None, None, None
         
         # Load supporting artifacts
@@ -209,8 +226,7 @@ def load_scanner_artifacts():
         return model, le, scaler, fps, keys
         
     except Exception as e:
-        st.info(f"🎭 Scanner models unavailable due to TensorFlow compatibility - using demo mode")
-        st.expander("🔍 Technical Details").write(f"Your trained model is preserved but needs TensorFlow version compatibility. Error: {str(e)[:200]}...")
+        st.info(f"🎭 Using demo mode due to cloud environment compatibility")
         return None, None, None, None, None
 
 @st.cache_resource
