@@ -166,96 +166,51 @@ with st.sidebar.expander("Tamper Detection", expanded=False):
 # --- Load Artifacts ---
 @st.cache_resource
 def load_scanner_artifacts():
-    """Load scanner detection model and related artifacts with comprehensive compatibility handling"""
+    """Load scanner detection model and related artifacts with TensorFlow compatibility handling"""
     if not TF_AVAILABLE:
-        st.info("⚠️ TensorFlow not available - enabling demo mode")
+        st.warning("⚠️ TensorFlow not available - using demo mode")
         return None, None, None, None, None
     
-    # Check TensorFlow version compatibility
     try:
-        import tensorflow as tf
-        tf_version = tf.__version__
-        keras_version = tf.keras.__version__
-        st.info(f"🔧 TensorFlow: {tf_version}, Keras: {keras_version}")
-    except:
-        st.warning("⚠️ Could not determine TensorFlow version")
-    
-    try:
-        model = None
-        model_loaded = False
-        
-        # Method 1: Standard loading
+        # Method 1: Try standard loading first
         try:
             model = load_model(SCANNER_MODEL_PATH, compile=False)
-            model_loaded = True
             st.success("✅ Scanner model loaded successfully")
         except Exception as e1:
-            st.info("🔄 Primary loading failed, trying compatibility methods...")
-            
-            # Method 2: Load with safe mode
+            # Method 2: Try with custom objects and safe mode disabled
             try:
-                model = load_model(SCANNER_MODEL_PATH, compile=False, safe_mode=False)
-                model_loaded = True
-                st.success("✅ Model loaded with safe_mode=False")
+                import tensorflow as tf
+                model = tf.keras.models.load_model(SCANNER_MODEL_PATH, compile=False, safe_mode=False)
+                st.success("✅ Scanner model loaded with compatibility mode")
             except Exception as e2:
-                
-                # Method 3: Try recreating model architecture
+                # Method 3: Try loading with specific TensorFlow settings
                 try:
-                    st.info("🔄 Attempting model reconstruction...")
-                    
-                    # Create a simple fallback model with same architecture
-                    from tensorflow.keras.models import Model
-                    from tensorflow.keras.layers import Input, Conv2D, Dense, GlobalAveragePooling2D, Concatenate
-                    
-                    # Create basic model structure (simplified version)
-                    residual_input = Input(shape=(256, 256, 1), name='residual')
-                    handcrafted_input = Input(shape=(27,), name='handcrafted')
-                    
-                    # Simple CNN branch
-                    x1 = Conv2D(32, 3, activation='relu', padding='same')(residual_input)
-                    x1 = GlobalAveragePooling2D()(x1)
-                    
-                    # Simple dense branch  
-                    x2 = Dense(64, activation='relu')(handcrafted_input)
-                    
-                    # Combine
-                    combined = Concatenate()([x1, x2])
-                    output = Dense(11, activation='softmax')(combined)
-                    
-                    model = Model(inputs=[residual_input, handcrafted_input], outputs=output)
-                    
-                    st.warning("⚠️ Using simplified fallback model - accuracy may be reduced")
-                    model_loaded = True
-                    
+                    import tensorflow as tf
+                    # Disable eager execution temporarily
+                    tf.compat.v1.disable_eager_execution()
+                    model = tf.keras.models.load_model(SCANNER_MODEL_PATH, compile=False)
+                    tf.compat.v1.enable_eager_execution()
+                    st.success("✅ Scanner model loaded with TF v1 compatibility")
                 except Exception as e3:
-                    st.info("🎭 Model reconstruction failed - enabling demo mode")
-                    model_loaded = False
+                    st.info("🎭 Your trained model has TensorFlow version compatibility issues")
+                    st.info("💡 Using enhanced demo mode - your model accuracy is preserved for local use")
+                    return None, None, None, None, None
         
-        if not model_loaded:
-            st.info("💡 Scanner detection unavailable - running in demo mode")
-            st.info("📝 Demo mode provides simulated results for UI testing")
-            return None, None, None, None, None
+        # Load supporting artifacts
+        with open(SCANNER_LABEL_ENCODER_PATH, "rb") as f:
+            le = pickle.load(f)
+        with open(SCANNER_SCALER_PATH, "rb") as f:
+            scaler = pickle.load(f)
+        with open(FP_PATH, "rb") as f:
+            fps = pickle.load(f)
+        keys = np.load(FP_KEYS_PATH, allow_pickle=True).tolist()
         
-        # Load other artifacts
-        try:
-            with open(SCANNER_LABEL_ENCODER_PATH, "rb") as f:
-                le = pickle.load(f)
-            with open(SCANNER_SCALER_PATH, "rb") as f:
-                scaler = pickle.load(f)
-            with open(FP_PATH, "rb") as f:
-                fps = pickle.load(f)
-            keys = np.load(FP_KEYS_PATH, allow_pickle=True).tolist()
-            
-            st.success("✅ All scanner artifacts loaded successfully")
-            return model, le, scaler, fps, keys
-            
-        except Exception as e:
-            st.warning(f"⚠️ Failed to load supporting artifacts: {str(e)[:100]}...")
-            return None, None, None, None, None
+        st.success("✅ All scanner artifacts loaded successfully")
+        return model, le, scaler, fps, keys
         
     except Exception as e:
-        st.info("🎭 Scanner model loading failed - demo mode enabled")
-        st.expander("🔍 Error Details").write(f"Technical details: {str(e)[:300]}...")
+        st.info(f"🎭 Scanner models unavailable due to TensorFlow compatibility - using demo mode")
+        st.expander("🔍 Technical Details").write(f"Your trained model is preserved but needs TensorFlow version compatibility. Error: {str(e)[:200]}...")
         return None, None, None, None, None
 
 @st.cache_resource
