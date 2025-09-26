@@ -5,7 +5,9 @@
       "src": "api/index.py",
       "use": "@vercel/python",
       "config": {
-        "maxLambdaSize": "50mb"
+        "maxLambdaSize": "50mb",
+        "maxDuration": 30,
+        "memory": 1024
       }
     }
   ],
@@ -19,11 +21,5 @@
     "TF_CPP_MIN_LOG_LEVEL": "2",
     "CUDA_VISIBLE_DEVICES": "",
     "OMP_NUM_THREADS": "1"
-  },
-  "functions": {
-    "api/index.py": {
-      "maxDuration": 30,
-      "memory": 1024
-    }
   }
 }
