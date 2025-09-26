@@ -683,21 +683,47 @@ st.markdown("""
 
 # Check if we're running in demo mode
 demo_mode_active = False
-if not TF_AVAILABLE or not JOBLIB_AVAILABLE:
+missing_deps = []
+
+if not TF_AVAILABLE:
+    missing_deps.append("tensorflow-cpu")
+if not JOBLIB_AVAILABLE:
+    missing_deps.append("joblib")
+if not CV2_AVAILABLE:
+    missing_deps.append("opencv-python-headless")
+if not PYWT_AVAILABLE:
+    missing_deps.append("PyWavelets")
+if not SKIMAGE_AVAILABLE:
+    missing_deps.append("scikit-image")
+if not PLOTLY_AVAILABLE:
+    missing_deps.append("plotly")
+
+if missing_deps:
     demo_mode_active = True
-    st.warning("""
-    🚧 **Demo Mode Active** - Some dependencies are not available.  
-    The application will show simulated results for demonstration purposes.  
-    For full functionality, ensure all dependencies in `requirements.txt` are installed.
+    st.info(f"""
+    🚧 **Demo Mode Active**  
+    
+    Missing optional dependencies: {', '.join(missing_deps)}
+    
+    The application is running with simulated AI analysis results to demonstrate the user interface and functionality.
+    
+    **What works in Demo Mode:**
+    - ✅ Full user interface
+    - ✅ File upload and processing  
+    - ✅ Simulated analysis results
+    - ✅ Export functionality
+    - ✅ Interactive visualizations
+    
+    **For full AI functionality:** Install all dependencies from requirements.txt
     """)
 
 if not os.path.exists("models") or not any(os.listdir("models") if os.path.exists("models") else []):
-    demo_mode_active = True
-    st.info("""
-    📁 **Model files not found** - Running in demonstration mode.  
-    Upload your trained model files to the `models/` directory for full functionality.  
-    See `DEPLOYMENT.md` for details.
-    """)
+    if not demo_mode_active:  # Only show if not already in demo mode
+        st.info("""
+        📁 **Model files not found** - Running in demonstration mode.  
+        Upload your trained model files to the `models/` directory for full AI functionality.  
+        See `DEPLOYMENT.md` for details.
+        """)
 
 # Dynamic description based on analysis type
 if analysis_type == "Both (Scanner + Tamper Detection)":
