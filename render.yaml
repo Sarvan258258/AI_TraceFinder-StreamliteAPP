@@ -1,0 +1,14 @@
+# Render Deployment Configuration for AI TraceFinder
+
+## Build Command:
+chmod +x build.sh && ./build.sh
+
+## Start Command:
+chmod +x start.sh && ./start.sh
+
+## Environment Variables:
+PYTHON_VERSION=3.11.0
+NODE_VERSION=18.17.0
+
+## Port:
+The app will automatically use the PORT environment variable provided by Render
